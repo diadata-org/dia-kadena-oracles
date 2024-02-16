@@ -10,6 +10,11 @@
 
   (env-sigs [{ "key": "admin-key", "caps": [ ] }])
   (load "dia-oracle.pact")
+  (typecheck "free.dia-oracle")
+
+  ; Cannot run Z3 verify due to a bug:
+  ; pact/dia-oracle.pact:59:2:OutputFailure: invariant violation: free variable unexpectedly found
+  ; (verify "free.dia-oracle")
 
 (commit-tx)
 

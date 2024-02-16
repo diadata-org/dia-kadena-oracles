@@ -13,11 +13,10 @@
   (defconst UNIX_EPOCH (parse-time "%s" "0") "Zero Unix epoch")
 
   (defschema value-schema
-    @model [(invariant (>= (diff-time timestamp UNIX_EPOCH) 0.0))]
     timestamp:time
     value:decimal)
 
-  (deftable values:{value-schema})
+  (deftable storage:{value-schema})
 
   (defcap GOVERNANCE ()
     "Module governance capability that only allows the admin to update this oracle"
@@ -41,7 +40,7 @@
   (defun get-value:object{value-schema} (key:string)
     "Read a value stored at key"
 
-    (with-default-read values key
+    (with-default-read storage key
       { "timestamp": UNIX_EPOCH, "value": 0.0 }
       { "timestamp" := t, "value" := v }
       { "timestamp": t, "value": v }
@@ -76,7 +75,7 @@
       (>= (diff-time (at "timestamp" value) UNIX_EPOCH) 0.0)
       "Timestamp should be positive")
 
-    (write values key value)
+    (write storage key value)
     (emit-event (UPDATE key value))
   )
 )
@@ -84,6 +83,6 @@
 (if (read-msg "upgrade")
   ["upgrade"]
   [
-    (create-table values)
+    (create-table storage)
   ]
 )

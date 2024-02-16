@@ -133,4 +133,7 @@ dist
 .DS_Store
 
 # Pact REPL history
-.pact-history
+**/*.pact-history
+
+# Z3 output
+**/*.smt
