@@ -1,0 +1,35 @@
+name: Test DIA Kadena oracles
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  test-pact:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pact
+        uses: ./.github/actions/setup-pact
+        with:
+          version: "4.10.0"
+
+      - name: Test key/value oracle
+        uses: ./.github/actions/repl
+        with:
+          target: pact/dia-oracle.repl
+
+      - name: Generate code coverage report
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          lcov-file: pact/coverage/lcov.info

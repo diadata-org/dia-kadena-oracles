@@ -1,0 +1,132 @@
+(begin-tx "load modules")
+
+  (env-data {
+    'dia-admin-keyset: { "keys": ["admin-key"], "pred": "keys-all" },
+    'namespace-keyset: { "keys": [ ], "pred": "keys-all" },
+    'upgrade: false
+  })
+
+  (define-namespace 'free (read-keyset 'namespace-keyset) (read-keyset 'namespace-keyset))
+
+  (env-sigs [{ "key": "admin-key", "caps": [ ] }])
+  (load "dia-oracle.pact")
+
+(commit-tx)
+
+(begin-tx "set value")
+  (use free.dia-oracle)
+
+  (env-sigs [{ "key": "admin-key", "caps": [ ] }])
+
+  (let ((key "key")
+        (timestamp (at "block-time" (chain-data)))
+        (value 10.0))
+
+    (expect "should store a value"
+      true
+      (set-value key timestamp value)
+    )
+
+    (expect "should emit an update event"
+      [{
+        "module-hash": (at "hash" (describe-module "free.dia-oracle")),
+        "name": "free.dia-oracle.UPDATE",
+        "params": [key { "timestamp": timestamp, "value": value }]
+      }]
+      (env-events true)
+    )
+  )
+
+(commit-tx)
+
+(begin-tx "set value validations")
+  (use free.dia-oracle)
+
+  (env-sigs [{ "key": "unknown-key", "caps": [ ] }])
+
+  (expect-failure "should fail because ADMIN capability cannot be granted"
+    "Keyset failure"
+    (set-value "key" (at "block-time" (chain-data)) 10.0)
+  )
+
+(commit-tx)
+
+(begin-tx "set multiple values")
+  (use free.dia-oracle)
+
+  (env-sigs [{ "key": "admin-key", "caps": [ ] }])
+
+  (let* ((keys ["a" "b" "c"])
+        (t (at "block-time" (chain-data)))
+        (values (make-list (length keys) { "timestamp": t, "value": 10.0 }))
+        (mhash (at "hash" (describe-module "free.dia-oracle"))))
+
+    (expect "should store multiple values"
+      (make-list (length keys) true)
+      (set-multiple-values keys values)
+    )
+
+    (expect "should emit multiple update events"
+      (zip (lambda (k v)
+        { "module-hash": mhash,
+          "name": "free.dia-oracle.UPDATE",
+          "params": [k v]
+        }
+      ) keys values)
+      (env-events true)
+    )
+  )
+
+(commit-tx)
+
+(begin-tx "set multiple values validations")
+  (use free.dia-oracle)
+
+  (expect-failure "should fail when list sizes are not equal"
+    "Input lengths should be equal"
+    (set-multiple-values ["a" "b"] [ ])
+  )
+
+  (env-sigs [{ "key": "unknown-key", "caps": [ ] }])
+
+  (expect-failure "should fail because ADMIN capability cannot be granted"
+    "Keyset failure"
+    (set-multiple-values [ ] [ ])
+  )
+
+(commit-tx)
+
+(begin-tx "update value internal")
+  (use free.dia-oracle)
+
+  (env-sigs [{ "key": "admin-key", "caps": [ ] }])
+
+  (expect-failure "should fail because STORAGE capability is missing"
+    "not granted: (free.dia-oracle.STORAGE)"
+    (update-value "key" { "timestamp": UNIX_EPOCH, "value": 10.0 })
+  )
+
+  (test-capability (STORAGE))
+
+  (expect-failure "should fail when timestamp is negative"
+    "Timestamp should be positive"
+    (update-value "key"
+      { "timestamp": (add-time UNIX_EPOCH -1), "value": 10.0 })
+  )
+
+(commit-tx)
+
+(begin-tx "get value")
+  (use free.dia-oracle)
+
+  (expect "should read the correct value"
+    { "timestamp": (at "block-time" (chain-data)), "value": 10.0 }
+    (get-value "key")
+  )
+
+  (expect "should return a default value when they key doesn't exist"
+    { "timestamp": UNIX_EPOCH, "value": 0.0 }
+    (get-value "unknown-key")
+  )
+
+(commit-tx)

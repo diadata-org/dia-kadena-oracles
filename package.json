@@ -1,0 +1,16 @@
+{
+  "name": "dia-kadena-oracles",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "coverage": "yarn test -- -c",
+    "test": "pact -t pact/dia-oracle.repl"
+  },
+  "dependencies": {
+    "@kadena/client": "^1.8.0"
+  },
+  "devDependencies": {
+    "@kadena/pactjs-cli": "^1.8.0"
+  }
+}
