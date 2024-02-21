@@ -57,14 +57,15 @@
   )
 
   (defun set-multiple-values (keys:[string] values:[object{value-schema}])
-    @doc "Update multiple oracle values"
-    @model
-      [ (property admin-authorized)
-        (property (= (length keys) (length values)))
-      ]
+    "Update multiple oracle values"
 
     (enforce (= (length keys) (length values)) "Input lengths should be equal")
-    (with-capability (ADMIN) (zip (update-value) keys values))
+
+    (with-capability (ADMIN)
+      (map
+        (lambda (i) (update-value (at i keys) (at i values)))
+        (enumerate 0 (- (length keys) 1)))
+    )
   )
 
   (defun update-value (key:string value:object{value-schema})
