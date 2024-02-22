@@ -1,4 +1,4 @@
-(namespace (read-msg 'ns))
+(namespace 'free)
 
 (enforce-keyset (read-keyset 'dia-admin-keyset))
 (define-keyset "free.dia-admin-keyset" (read-keyset 'dia-admin-keyset))
