@@ -1,4 +1,4 @@
-(namespace 'free)
+(namespace (read-msg 'ns))
 
 (enforce-keyset (read-keyset 'dia-admin-keyset))
 (define-keyset "free.dia-admin-keyset" (read-keyset 'dia-admin-keyset))
@@ -32,7 +32,7 @@
     (compose-capability (STORAGE))
   )
 
-  (defcap UPDATE (key:string value:object{value-schema})
+  (defcap UPDATE (key:string timestamp:time value:decimal)
     "Event that indicates an update in oracle data"
     @event true
   )
@@ -51,33 +51,34 @@
     @doc "Update a single oracle value"
     @model [(property admin-authorized)]
 
-    (with-capability (ADMIN)
-      (update-value key { "timestamp": timestamp, "value": value })
-    )
+    (with-capability (ADMIN) (update-value key timestamp value))
   )
 
-  (defun set-multiple-values (keys:[string] values:[object{value-schema}])
+  (defun set-multiple-values (keys:[string] timestamps:[time] values:[decimal])
     "Update multiple oracle values"
 
-    (enforce (= (length keys) (length values)) "Input lengths should be equal")
+    (enforce (and
+      (= (length keys) (length timestamps))
+      (= (length keys) (length values)))
+      "Input lengths should be equal")
 
     (with-capability (ADMIN)
       (map
-        (lambda (i) (update-value (at i keys) (at i values)))
+        (lambda (i) (update-value (at i keys) (at i timestamps) (at i values)))
         (enumerate 0 (- (length keys) 1)))
     )
   )
 
-  (defun update-value (key:string value:object{value-schema})
+  (defun update-value (key:string timestamp:time value:decimal)
     "Update the value stored at key. Can only be used from within the module."
 
     (require-capability (STORAGE))
     (enforce
-      (>= (diff-time (at "timestamp" value) UNIX_EPOCH) 0.0)
+      (>= (diff-time timestamp UNIX_EPOCH) 0.0)
       "Timestamp should be positive")
 
-    (write storage key value)
-    (emit-event (UPDATE key value))
+    (write storage key { "timestamp": timestamp, "value": value })
+    (emit-event (UPDATE key timestamp value))
   )
 )
 

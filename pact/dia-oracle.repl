@@ -3,10 +3,11 @@
   (env-data {
     'dia-admin-keyset: { "keys": ["admin-key"], "pred": "keys-all" },
     'namespace-keyset: { "keys": [ ], "pred": "keys-all" },
+    'ns: "free",
     'upgrade: false
   })
 
-  (define-namespace 'free (read-keyset 'namespace-keyset) (read-keyset 'namespace-keyset))
+  (define-namespace (read-msg 'ns) (read-keyset 'namespace-keyset) (read-keyset 'namespace-keyset))
 
   (env-sigs [{ "key": "admin-key", "caps": [ ] }])
   (load "dia-oracle.pact")
@@ -34,7 +35,7 @@
       [{
         "module-hash": (at "hash" (describe-module "free.dia-oracle")),
         "name": "free.dia-oracle.UPDATE",
-        "params": [key { "timestamp": timestamp, "value": value }]
+        "params": [key timestamp value]
       }]
       (env-events true)
     )
@@ -60,22 +61,21 @@
   (env-sigs [{ "key": "admin-key", "caps": [ ] }])
 
   (let* ((keys ["a" "b" "c"])
-        (t (at "block-time" (chain-data)))
-        (values (make-list (length keys) { "timestamp": t, "value": 10.0 }))
-        (mhash (at "hash" (describe-module "free.dia-oracle"))))
+        (timestamps (make-list (length keys) (at "block-time" (chain-data))))
+        (values (make-list (length keys) 10.0)))
 
     (expect "should store multiple values"
       (make-list (length keys) true)
-      (set-multiple-values keys values)
+      (set-multiple-values keys timestamps values)
     )
 
     (expect "should emit multiple update events"
-      (zip (lambda (k v)
-        { "module-hash": mhash,
+      (map (lambda (ix)
+        { "module-hash": (at "hash" (describe-module "free.dia-oracle")),
           "name": "free.dia-oracle.UPDATE",
-          "params": [k v]
+          "params": [(at ix keys) (at ix timestamps) (at ix values)]
         }
-      ) keys values)
+      ) (enumerate 0 (- (length keys) 1)))
       (env-events true)
     )
   )
@@ -87,14 +87,14 @@
 
   (expect-failure "should fail when list sizes are not equal"
     "Input lengths should be equal"
-    (set-multiple-values ["a" "b"] [ ])
+    (set-multiple-values ["a" "b"] [ ] [1.0])
   )
 
   (env-sigs [{ "key": "unknown-key", "caps": [ ] }])
 
   (expect-failure "should fail because ADMIN capability cannot be granted"
     "Keyset failure"
-    (set-multiple-values [ ] [ ])
+    (set-multiple-values [] [] [])
   )
 
 (commit-tx)
@@ -106,15 +106,14 @@
 
   (expect-failure "should fail because STORAGE capability is missing"
     "not granted: (free.dia-oracle.STORAGE)"
-    (update-value "key" { "timestamp": UNIX_EPOCH, "value": 10.0 })
+    (update-value "key" UNIX_EPOCH 10.0)
   )
 
   (test-capability (STORAGE))
 
   (expect-failure "should fail when timestamp is negative"
     "Timestamp should be positive"
-    (update-value "key"
-      { "timestamp": (add-time UNIX_EPOCH -1), "value": 10.0 })
+    (update-value "key" (add-time UNIX_EPOCH -1) 10.0)
   )
 
 (commit-tx)
