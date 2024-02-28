@@ -1,15 +1,16 @@
-(namespace 'free)
+(namespace "free")
 
-(enforce-keyset (read-keyset 'dia-admin-keyset))
-(define-keyset "free.dia-admin-keyset" (read-keyset 'dia-admin-keyset))
+(enforce-keyset (read-keyset 'admin-keyset))
+(define-keyset "free.dia-admin-keyset" (read-keyset 'admin-keyset))
 
 (module dia-oracle GOVERNANCE
   @doc "DIA key/value oracle with support for multiple updates in a single tx"
 
   @model
-    [ (defproperty admin-authorized (authorized-by "free.dia-admin-keyset"))
+    [ (defproperty admin-authorized (authorized-by ADMIN_KEYSET))
     ]
 
+  (defconst ADMIN_KEYSET "free.dia-admin-keyset")
   (defconst UNIX_EPOCH (parse-time "%s" "0") "Zero Unix epoch")
 
   (defschema value-schema
@@ -20,7 +21,7 @@
 
   (defcap GOVERNANCE ()
     "Module governance capability that only allows the admin to update this oracle"
-    (enforce-keyset "free.dia-admin-keyset"))
+    (enforce-keyset ADMIN_KEYSET))
 
   (defcap STORAGE ()
     "Magic capability to protect oracle data storage"

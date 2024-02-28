@@ -3,14 +3,34 @@
   "version": "0.1.0",
   "license": "UNLICENSED",
   "private": true,
+  "main": "build/index.js",
   "scripts": {
+    "build": "tsc",
+    "cli": "tsc && node .",
     "coverage": "yarn test -- -c",
+    "fmt": "prettier --write .",
     "test": "pact -t pact/dia-oracle.repl"
   },
   "dependencies": {
-    "@kadena/client": "^1.8.0"
+    "@kadena/client": "^1.8.0",
+    "@kadena/cryptography-utils": "^0.4.2",
+    "@kadena/pactjs": "^0.4.2",
+    "cmd-ts": "^0.13.0",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
-    "@kadena/pactjs-cli": "^1.8.0"
+    "@kadena/pactjs-cli": "^1.8.0",
+    "@kadena/types": "^0.6.0",
+    "@types/node": "^20.11.19",
+    "prettier": "^3.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "resolutions": {
+    "strip-ansi": "6.0.0"
+  },
+  "prettier": {
+    "printWidth": 99,
+    "singleQuote": true
   }
 }

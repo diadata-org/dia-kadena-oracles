@@ -137,3 +137,6 @@ dist
 
 # Z3 output
 **/*.smt
+
+# TSC output
+build/

@@ -1,13 +1,12 @@
 (begin-tx "load modules")
 
   (env-data {
-    'dia-admin-keyset: { "keys": ["admin-key"], "pred": "keys-all" },
+    'admin-keyset: { "keys": ["admin-key"], "pred": "keys-all" },
     'namespace-keyset: { "keys": [ ], "pred": "keys-all" },
-    'ns: "free",
     'upgrade: false
   })
 
-  (define-namespace (read-msg 'ns) (read-keyset 'namespace-keyset) (read-keyset 'namespace-keyset))
+  (define-namespace "free" (read-keyset 'namespace-keyset) (read-keyset 'namespace-keyset))
 
   (env-sigs [{ "key": "admin-key", "caps": [ ] }])
   (load "dia-oracle.pact")
