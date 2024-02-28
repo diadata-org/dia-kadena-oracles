@@ -22,7 +22,7 @@ jobs:
       - name: Setup Pact
         uses: ./.github/actions/setup-pact
         with:
-          version: "4.10.0"
+          version: '4.10.0'
 
       - name: Test key/value oracle
         uses: ./.github/actions/repl

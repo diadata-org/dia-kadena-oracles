@@ -3,13 +3,13 @@ description: Run a REPL test
 
 inputs:
   target:
-    description: "The target file to run"
+    description: 'The target file to run'
     required: true
 
 runs:
   using: composite
   steps:
-    - name: "Test ${{ inputs.target }}"
+    - name: 'Test ${{ inputs.target }}'
       shell: bash
       run: |
         bin/pact -t ${{ inputs.target }} -c > out.log 2>&1

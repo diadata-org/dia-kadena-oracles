@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import {
   binary,
   command,
@@ -69,12 +70,6 @@ const networkArgs = {
 };
 
 const accountArgs = {
-  account: option({
-    long: 'account',
-    short: 'n',
-    description: 'deployer account name (default: k:<public-key>)',
-    type: optional(string),
-  }),
   publicKey: option({
     long: 'public-key',
     short: 'pk',
@@ -87,14 +82,18 @@ const accountArgs = {
     description: 'deployer secret key (recommended to use env variable for safety)',
     env: 'SECRET_KEY',
   }),
+  account: option({
+    long: 'account',
+    short: 'n',
+    description: 'deployer account name (default: k:<public-key>)',
+    type: optional(string),
+  }),
 };
 
 const deploy = command({
   name: 'deploy',
   description: 'deploy or upgrade a pact smart contract',
   args: {
-    ...networkArgs,
-    ...accountArgs,
     file: positional({
       displayName: 'module',
       description: 'Pact module file to deploy (.pact)',
@@ -105,6 +104,8 @@ const deploy = command({
       short: 'u',
       description: 'upgrade an existing contract (default: false)',
     }),
+    ...accountArgs,
+    ...networkArgs,
   },
   handler: async ({ file, host, chainId, networkId, upgrade, ...keypair }) => {
     const senderAccount = keypair.account || `k:${keypair.publicKey}`;
@@ -123,8 +124,7 @@ const deploy = command({
     const signedTx = await sign(tx);
 
     if (!isSignedTransaction(signedTx)) {
-      console.error('Command is not signed');
-      process.exit(1);
+      throw new Error('Command is not signed');
     }
 
     const { pollStatus, submitOne } = createClient(getHostUrl(host));
@@ -145,8 +145,7 @@ const deploy = command({
     const response = await pollStatus(descr);
     const entry = response[descr.requestKey];
     if (!entry) {
-      console.error('Invalid API response');
-      process.exit(1);
+      throw new Error('Invalid API response');
     }
 
     validateResult(entry);
@@ -187,11 +186,11 @@ const read = command({
   name: 'read',
   description: 'execute a pact statement in read-only mode',
   args: {
-    ...networkArgs,
     code: positional({
       displayName: 'code',
       description: 'pact statement to run',
     }),
+    ...networkArgs,
   },
   handler: async ({ code, host, chainId, networkId }) => {
     const command = Pact.builder
@@ -250,9 +249,9 @@ const cmd = subcommands({
   name: 'dia-kadena-cli',
   version: '0.1.0',
   cmds: {
+    balance,
     deploy,
     'gen-keypair': genKeypair,
-    balance,
     read,
   },
 });

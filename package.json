@@ -3,12 +3,17 @@
   "version": "0.1.0",
   "license": "UNLICENSED",
   "private": true,
+  "bin": {
+    "dia-kadena-cli": "build/cli.js"
+  },
   "main": "build/cli.js",
   "scripts": {
     "build": "tsc",
-    "cli": "tsc && node .",
+    "clean": "rimraf build",
     "coverage": "yarn test -- -c",
+    "dev": "ts-node .",
     "fmt": "prettier --write .",
+    "start": "node .",
     "test": "pact -t pact/dia-oracle.repl"
   },
   "dependencies": {
@@ -23,6 +28,7 @@
     "@kadena/types": "^0.6.0",
     "@types/node": "^20.11.19",
     "prettier": "^3.2.5",
+    "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   },
