@@ -45,24 +45,23 @@ const validateResult = (data: ICommandResult) => {
   return data.result;
 };
 
+const estimateGas = () => {};
+
 const networkArgs = {
   host: option({
     long: 'host',
-    short: 'h',
     env: 'API_HOST',
     description: 'chainweb api host (default: https://api.testnet.chainweb.com)',
     type: { ...string, defaultValue: () => 'https://api.testnet.chainweb.com' },
   }),
   chainId: option({
     long: 'chain',
-    short: 'c',
     env: 'CHAIN_ID',
     description: 'kadena chain id (default: 0)',
     type: { ...ChainId, defaultValue: () => '0' },
   }),
   networkId: option({
     long: 'network',
-    short: 'n',
     env: 'NETWORK_ID',
     description: 'kadena network (default: testnet04)',
     type: { ...string, defaultValue: () => 'testnet04' },
@@ -72,7 +71,7 @@ const networkArgs = {
 const accountArgs = {
   account: option({
     long: 'account',
-    short: 'a',
+    short: 'n',
     description: 'deployer account name (default: k:<public-key>)',
     type: optional(string),
   }),
@@ -156,30 +155,6 @@ const deploy = command({
   },
 });
 
-const read = command({
-  name: 'read',
-  description: 'execute a pact statement in read-only mode',
-  args: {
-    ...networkArgs,
-    code: positional({
-      displayName: 'code',
-      description: 'pact statement to run',
-    }),
-  },
-  handler: async ({ code, host, chainId, networkId }) => {
-    const command = Pact.builder
-      .execution(code)
-      .setMeta({ chainId })
-      .setNetworkId(networkId)
-      .createTransaction();
-
-    const { dirtyRead } = createClient(getHostUrl(host));
-    const response = await dirtyRead(command);
-    const result = validateResult(response);
-    console.log(JSON.stringify(result.data, null, 2));
-  },
-});
-
 const genKeypair = command({
   name: 'gen-keypair',
   description: 'generate a new kadena public/secret key pair',
@@ -208,11 +183,67 @@ const genKeypair = command({
   },
 });
 
+const read = command({
+  name: 'read',
+  description: 'execute a pact statement in read-only mode',
+  args: {
+    ...networkArgs,
+    code: positional({
+      displayName: 'code',
+      description: 'pact statement to run',
+    }),
+  },
+  handler: async ({ code, host, chainId, networkId }) => {
+    const command = Pact.builder
+      .execution(code)
+      .setMeta({ chainId })
+      .setNetworkId(networkId)
+      .createTransaction();
+
+    const { dirtyRead } = createClient(getHostUrl(host));
+    const response = await dirtyRead(command);
+    const result = validateResult(response);
+    console.log(JSON.stringify(result.data, null, 2));
+  },
+});
+
 const balance = command({
   name: 'balance',
   description: 'query kda balance of an account',
-  args: {},
-  handler: async (args) => {},
+  args: {
+    account: positional({
+      displayName: 'account',
+      description: 'kadena account name',
+    }),
+    ...networkArgs,
+  },
+  handler: async ({ account, host, chainId, networkId }) => {
+    const command = Pact.builder
+      .execution(`(coin.get-balance "${account}")`)
+      .setMeta({ chainId })
+      .setNetworkId(networkId)
+      .createTransaction();
+
+    const { dirtyRead } = createClient(getHostUrl(host));
+    const { result } = await dirtyRead(command);
+
+    if (result.status !== 'success') {
+      if (
+        'message' in result.error &&
+        typeof result.error.message === 'string' &&
+        result.error.message.includes('row not found')
+      ) {
+        console.log('0.0');
+        return;
+      }
+
+      console.error('Failed to query account balance:');
+      console.error(JSON.stringify(result.error, null, 2));
+      process.exit(1);
+    }
+
+    console.log(result.data.toString());
+  },
 });
 
 const cmd = subcommands({
@@ -221,6 +252,7 @@ const cmd = subcommands({
   cmds: {
     deploy,
     'gen-keypair': genKeypair,
+    balance,
     read,
   },
 });
