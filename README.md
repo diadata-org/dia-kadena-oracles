@@ -67,5 +67,5 @@ dia-kadena-cli read '(describe-module "free.dia-oracle")' --chain 3
 
 ## Important notes
 
-- Unline EVM or WASM, Kadena contract are not compiled to bytecode before deploying. The full human-readable source code is uploaded to the network, which means there's no need to verify contracts on explorer.
+- Unlike EVM or WASM, Kadena contract are not compiled to bytecode before deploying. The full human-readable source code is uploaded to the network, which means there's no need to verify contracts on explorer.
 - We highly recommend to create different admin accounts for every oracle smart contract you deploy. Kadena accounts have a nonce, therefore it's not possible to submit multiple commands in parallell. Doing so might cause issues at runtime.
