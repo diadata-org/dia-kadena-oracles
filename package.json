@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "license": "UNLICENSED",
   "private": true,
-  "main": "build/index.js",
+  "main": "build/cli.js",
   "scripts": {
     "build": "tsc",
     "cli": "tsc && node .",

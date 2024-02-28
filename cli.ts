@@ -158,7 +158,7 @@ const deploy = command({
 
 const read = command({
   name: 'read',
-  description: 'execute a pact statement in a read-only mode',
+  description: 'execute a pact statement in read-only mode',
   args: {
     ...networkArgs,
     code: positional({
@@ -176,7 +176,7 @@ const read = command({
     const { dirtyRead } = createClient(getHostUrl(host));
     const response = await dirtyRead(command);
     const result = validateResult(response);
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(result.data, null, 2));
   },
 });
 
@@ -206,6 +206,13 @@ const genKeypair = command({
     console.log('\nFollow this link to initialize and fund the account on testnet:');
     console.log('https://tools.kadena.io/faucet/new');
   },
+});
+
+const balance = command({
+  name: 'balance',
+  description: 'query kda balance of an account',
+  args: {},
+  handler: async (args) => {},
 });
 
 const cmd = subcommands({
