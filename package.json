@@ -4,20 +4,21 @@
   "license": "UNLICENSED",
   "private": true,
   "bin": {
-    "dia-kadena-cli": "build/cli.js"
+    "dia-kadena-cli": "build/index.js"
   },
-  "main": "build/cli.js",
+  "main": "build/index.js",
   "scripts": {
     "build": "tsc",
     "clean": "rimraf build",
     "coverage": "yarn test -- -c",
-    "dev": "ts-node .",
+    "dev": "ts-node src/index.ts",
     "fmt": "prettier --write .",
     "start": "node .",
     "test": "pact -t pact/dia-oracle.repl"
   },
   "dependencies": {
     "@kadena/client": "^1.8.0",
+    "@kadena/client-utils": "^0.4.1",
     "@kadena/cryptography-utils": "^0.4.2",
     "@kadena/pactjs": "^0.4.2",
     "cmd-ts": "^0.13.0",

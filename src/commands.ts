@@ -1,34 +1,30 @@
-#!/usr/bin/env node
-import {
-  binary,
-  command,
-  extendType,
-  flag,
-  number,
-  option,
-  optional,
-  positional,
-  run,
-  string,
-  subcommands,
-} from 'cmd-ts';
-import { File } from 'cmd-ts/batteries/fs';
-import dotenv from 'dotenv';
 import fs from 'fs';
+import { command, extendType, flag, number, option, optional, positional, string } from 'cmd-ts';
+import { File } from 'cmd-ts/batteries/fs';
+
 import {
   ChainId,
-  ICommandResult,
-  Pact,
   createClient,
   createSignWithKeypair,
+  createTransaction,
   getHostUrl,
-  isSignedTransaction,
 } from '@kadena/client';
+import {
+  addData,
+  addKeyset,
+  addSigner,
+  composePactCommand,
+  execution,
+  setMeta,
+  setNetworkId,
+} from '@kadena/client/fp';
+import { asyncPipe, dirtyReadClient } from '@kadena/client-utils/core';
+import { getBalance } from '@kadena/client-utils/coin';
 import { genKeyPair } from '@kadena/cryptography-utils';
 
-dotenv.config();
+import { estimateGas, extractResult, logTransaction, safeSign } from './utils';
 
-const EXPLORER_URL = 'https://explorer.chainweb.com';
+const DEFAULT_HOST = 'https://api.testnet.chainweb.com';
 
 const ChainId = extendType(number, async (n) => {
   if (Number.isNaN(n) || !Number.isFinite(n) || Math.round(n) !== n || n < 0 || n > 19) {
@@ -37,23 +33,12 @@ const ChainId = extendType(number, async (n) => {
   return n.toString() as ChainId;
 });
 
-const validateResult = (data: ICommandResult) => {
-  if (data.result.status !== 'success') {
-    console.error('Failed to execute the command:');
-    console.error(JSON.stringify(data.result.error, null, 2));
-    process.exit(1);
-  }
-  return data.result;
-};
-
-const estimateGas = () => {};
-
 const networkArgs = {
   host: option({
     long: 'host',
     env: 'API_HOST',
-    description: 'chainweb api host (default: https://api.testnet.chainweb.com)',
-    type: { ...string, defaultValue: () => 'https://api.testnet.chainweb.com' },
+    description: `chainweb api host (default: ${DEFAULT_HOST})`,
+    type: { ...string, defaultValue: () => DEFAULT_HOST },
   }),
   chainId: option({
     long: 'chain',
@@ -90,7 +75,7 @@ const accountArgs = {
   }),
 };
 
-const deploy = command({
+export const deploy = command({
   name: 'deploy',
   description: 'deploy or upgrade a pact smart contract',
   args: {
@@ -111,50 +96,39 @@ const deploy = command({
     const senderAccount = keypair.account || `k:${keypair.publicKey}`;
     const src = await fs.promises.readFile(file, 'utf8');
 
-    const tx = Pact.builder
-      .execution(src)
-      .addData('upgrade', upgrade)
-      .addKeyset('admin-keyset', 'keys-all', keypair.publicKey)
-      .addSigner(keypair.publicKey)
-      .setMeta({ chainId, gasLimit: 100_000, senderAccount })
-      .setNetworkId(networkId)
-      .createTransaction();
-
-    const sign = createSignWithKeypair(keypair);
-    const signedTx = await sign(tx);
-
-    if (!isSignedTransaction(signedTx)) {
-      throw new Error('Command is not signed');
-    }
-
-    const { pollStatus, submitOne } = createClient(getHostUrl(host));
-
     if (upgrade) {
       console.log('Upgrading an existing contract');
     }
 
-    const descr = await submitOne(signedTx);
-    console.log('Request key:', descr.requestKey);
+    const command = composePactCommand(
+      execution(src),
+      addKeyset('admin-keyset', 'keys-all', keypair.publicKey),
+      addData('upgrade', upgrade),
+      addSigner(keypair.publicKey),
+      setMeta({ chainId, gasLimit: 100_000, senderAccount }),
+      setNetworkId(networkId),
+    );
 
-    if (networkId.startsWith('mainnet') || networkId.startsWith('testnet')) {
-      const network = networkId.slice(0, -2);
-      const url = `${EXPLORER_URL}/${network}/tx/${descr.requestKey}`;
-      console.log('Explorer link:', url);
-    }
+    const client = createClient(getHostUrl(host));
+    const { gasLimit } = await estimateGas(command, client);
 
-    const response = await pollStatus(descr);
-    const entry = response[descr.requestKey];
-    if (!entry) {
-      throw new Error('Invalid API response');
-    }
+    const result = await asyncPipe(
+      composePactCommand(setMeta({ gasLimit })),
+      createTransaction,
+      createSignWithKeypair(keypair),
+      safeSign(createSignWithKeypair(keypair)),
+      client.submitOne,
+      logTransaction,
+      client.listen,
+      extractResult,
+    )(command);
 
-    validateResult(entry);
     console.log(`Successfully deployed ${file}:`);
-    console.log(JSON.stringify(entry, null, 2));
+    console.log(JSON.stringify(result, null, 2));
   },
 });
 
-const genKeypair = command({
+export const genKeypair = command({
   name: 'gen-keypair',
   description: 'generate a new kadena public/secret key pair',
   args: {
@@ -182,7 +156,7 @@ const genKeypair = command({
   },
 });
 
-const read = command({
+export const read = command({
   name: 'read',
   description: 'execute a pact statement in read-only mode',
   args: {
@@ -193,20 +167,18 @@ const read = command({
     ...networkArgs,
   },
   handler: async ({ code, host, chainId, networkId }) => {
-    const command = Pact.builder
-      .execution(code)
-      .setMeta({ chainId })
-      .setNetworkId(networkId)
-      .createTransaction();
+    const command = composePactCommand(
+      execution(code),
+      setMeta({ chainId }),
+      setNetworkId(networkId),
+    );
 
-    const { dirtyRead } = createClient(getHostUrl(host));
-    const response = await dirtyRead(command);
-    const result = validateResult(response);
-    console.log(JSON.stringify(result.data, null, 2));
+    const result = await dirtyReadClient({ host })(command).execute();
+    console.log(JSON.stringify(result, null, 2));
   },
 });
 
-const balance = command({
+export const balance = command({
   name: 'balance',
   description: 'query kda balance of an account',
   args: {
@@ -217,46 +189,7 @@ const balance = command({
     ...networkArgs,
   },
   handler: async ({ account, host, chainId, networkId }) => {
-    const command = Pact.builder
-      .execution(`(coin.get-balance "${account}")`)
-      .setMeta({ chainId })
-      .setNetworkId(networkId)
-      .createTransaction();
-
-    const { dirtyRead } = createClient(getHostUrl(host));
-    const { result } = await dirtyRead(command);
-
-    if (result.status !== 'success') {
-      if (
-        'message' in result.error &&
-        typeof result.error.message === 'string' &&
-        result.error.message.includes('row not found')
-      ) {
-        console.log('0.0');
-        return;
-      }
-
-      console.error('Failed to query account balance:');
-      console.error(JSON.stringify(result.error, null, 2));
-      process.exit(1);
-    }
-
-    console.log(result.data.toString());
+    const balance = await getBalance(account, networkId, chainId, host);
+    console.log(balance || '0');
   },
-});
-
-const cmd = subcommands({
-  name: 'dia-kadena-cli',
-  version: '0.1.0',
-  cmds: {
-    balance,
-    deploy,
-    'gen-keypair': genKeypair,
-    read,
-  },
-});
-
-run(binary(cmd), process.argv).catch((e: unknown) => {
-  console.error(e);
-  process.exit(1);
 });

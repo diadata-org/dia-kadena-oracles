@@ -16,6 +16,6 @@
     "checkJs": false,
     "sourceMap": true
   },
-  "include": ["cli.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules"]
 }
