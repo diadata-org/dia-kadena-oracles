@@ -1,1 +1,2 @@
-*.ts typescript
+# github/linguist override
+*.ts linguist-language=Typescript
