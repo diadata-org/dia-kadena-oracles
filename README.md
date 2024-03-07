@@ -59,10 +59,20 @@ Example of deploying a `dia-oracle.pact` module to testnet:
 dia-kadena-cli gen-keypair
 
 # Submit the deployment transaction (testnet04 is selected by default)
-dia-kadena-cli deploy pact/dia-oracle.pact --chain 3
+dia-kadena-cli deploy pact/dia-oracle.pact --chain 4
 
 # Verify that the contract is ready for usage
-dia-kadena-cli read '(describe-module "free.dia-oracle")' --chain 3
+dia-kadena-cli read '(describe-module "free.dia-oracle")' --chain 4
+```
+
+## Changing the oracle admin
+
+Because `define-keyset` can only be called in top level (see [Pact documentation](https://docs.kadena.io/pact/reference/functions/keysets#define-keyseth1939391989)), the ownership change functionality could not be implemented inside the contract module. Instead, you will need to execute `define-keyset` manually to change the oracle admin. It can be done using the same CLI:
+
+```sh
+dia-kadena-cli write '(define-keyset "free.dia-admin-keyset" (read-keyset "ks"))' \
+    --keyset ks=keys-all,<YOUR PUBLIC KEY> \
+    --chain 4
 ```
 
 ## Important notes

@@ -1,14 +1,8 @@
 import fs from 'fs';
-import { command, extendType, flag, number, option, optional, positional, string } from 'cmd-ts';
+import { command, flag, multioption, option, optional, positional, string } from 'cmd-ts';
 import { File } from 'cmd-ts/batteries/fs';
 
-import {
-  ChainId,
-  createClient,
-  createSignWithKeypair,
-  createTransaction,
-  getHostUrl,
-} from '@kadena/client';
+import { createSignWithKeypair } from '@kadena/client';
 import {
   addData,
   addKeyset,
@@ -18,20 +12,14 @@ import {
   setMeta,
   setNetworkId,
 } from '@kadena/client/fp';
-import { asyncPipe, dirtyReadClient } from '@kadena/client-utils/core';
+import { dirtyReadClient } from '@kadena/client-utils/core';
 import { getBalance } from '@kadena/client-utils/coin';
 import { genKeyPair } from '@kadena/cryptography-utils';
 
-import { estimateGas, extractResult, logTransaction, safeSign } from './utils';
+import { sendTransaction, setExecData } from './kadena';
+import { ChainId, Keysets, MessageData } from './utils';
 
 const DEFAULT_HOST = 'https://api.testnet.chainweb.com';
-
-const ChainId = extendType(number, async (n) => {
-  if (Number.isNaN(n) || !Number.isFinite(n) || Math.round(n) !== n || n < 0 || n > 19) {
-    throw new Error(`Input is not a valid chain id`);
-  }
-  return n.toString() as ChainId;
-});
 
 const networkArgs = {
   host: option({
@@ -44,7 +32,7 @@ const networkArgs = {
     long: 'chain',
     env: 'CHAIN_ID',
     description: 'kadena chain id (default: 0)',
-    type: { ...ChainId, defaultValue: () => '0' },
+    type: ChainId,
   }),
   networkId: option({
     long: 'network',
@@ -75,13 +63,32 @@ const accountArgs = {
   }),
 };
 
+const pactArgs = {
+  code: positional({
+    displayName: 'code',
+    description: 'pact statement to run',
+  }),
+  data: multioption({
+    long: 'data',
+    short: 'd',
+    description: 'raw message data in the format key=value',
+    type: MessageData,
+  }),
+  keysets: multioption({
+    long: 'keyset',
+    short: 'k',
+    description: 'transaction keyset in the format key=<pred>,<pk0>,<pk1>...',
+    type: Keysets,
+  }),
+};
+
 export const deploy = command({
   name: 'deploy',
   description: 'deploy or upgrade a pact smart contract',
   args: {
     file: positional({
       displayName: 'module',
-      description: 'Pact module file to deploy (.pact)',
+      description: 'pact module file to deploy (.pact)',
       type: File,
     }),
     upgrade: flag({
@@ -105,23 +112,12 @@ export const deploy = command({
       addKeyset('admin-keyset', 'keys-all', keypair.publicKey),
       addData('upgrade', upgrade),
       addSigner(keypair.publicKey),
-      setMeta({ chainId, gasLimit: 100_000, senderAccount }),
+      setMeta({ chainId, senderAccount }),
       setNetworkId(networkId),
     );
 
-    const client = createClient(getHostUrl(host));
-    const { gasLimit } = await estimateGas(command, client);
-
-    const result = await asyncPipe(
-      composePactCommand(setMeta({ gasLimit })),
-      createTransaction,
-      createSignWithKeypair(keypair),
-      safeSign(createSignWithKeypair(keypair)),
-      client.submitOne,
-      logTransaction,
-      client.listen,
-      extractResult,
-    )(command);
+    const sign = createSignWithKeypair(keypair);
+    const result = await sendTransaction(host, command, sign);
 
     console.log(`Successfully deployed ${file}:`);
     console.log(JSON.stringify(result, null, 2));
@@ -159,21 +155,45 @@ export const genKeypair = command({
 export const read = command({
   name: 'read',
   description: 'execute a pact statement in read-only mode',
+  args: { ...pactArgs, ...networkArgs },
+  handler: async (args) => {
+    const command = composePactCommand(
+      execution(args.code),
+      setExecData({ ...args.data, ...args.keysets }),
+      setMeta({ chainId: args.chainId }),
+      setNetworkId(args.networkId),
+    );
+
+    const read = dirtyReadClient({ host: args.host });
+    const result = await read(command).execute();
+    console.log(JSON.stringify(result, null, 2));
+  },
+});
+
+export const write = command({
+  name: 'write',
+  description: 'execute a pact statement inside a transaction',
   args: {
-    code: positional({
-      displayName: 'code',
-      description: 'pact statement to run',
-    }),
+    ...pactArgs,
+    ...accountArgs,
     ...networkArgs,
   },
-  handler: async ({ code, host, chainId, networkId }) => {
+  handler: async (args) => {
+    const { code, data, keysets, host, chainId, networkId, ...keypair } = args;
+    const senderAccount = keypair.account || `k:${keypair.publicKey}`;
+
     const command = composePactCommand(
       execution(code),
-      setMeta({ chainId }),
+      addSigner(keypair.publicKey),
+      setExecData({ ...data, ...keysets }),
+      setMeta({ chainId, senderAccount }),
       setNetworkId(networkId),
     );
 
-    const result = await dirtyReadClient({ host })(command).execute();
+    const sign = createSignWithKeypair(keypair);
+    const result = await sendTransaction(host, command, sign);
+
+    console.log('Successfully executed a transaction:');
     console.log(JSON.stringify(result, null, 2));
   },
 });

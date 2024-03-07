@@ -1,86 +1,73 @@
-import { createClient, createTransaction, isSignedTransaction } from '@kadena/client';
-import { composePactCommand } from '@kadena/client/fp';
-import { asyncPipe } from '@kadena/client-utils/core';
-
-import type {
-  ICommand,
-  ICommandResult,
-  IPartialPactCommand,
-  ITransactionDescriptor,
-  IUnsignedCommand,
-} from '@kadena/client';
-import type { PactValue } from '@kadena/types';
+import { array, extendType, number, string } from 'cmd-ts';
+import type { BuiltInPredicate, ChainId as KadenaChainId } from '@kadena/client';
 
 export const panic = (msg?: unknown, ...params: unknown[]) => {
   console.error(msg, ...params);
   process.exit(1);
 };
 
-const EXPLORER_URL = 'https://explorer.chainweb.com';
-
-export const logTransaction = (descriptor: ITransactionDescriptor) => {
-  const { networkId, requestKey } = descriptor;
-  console.log('Request key:', requestKey);
-
-  if (networkId.startsWith('mainnet') || networkId.startsWith('testnet')) {
-    const network = networkId.slice(0, -2);
-    const url = `${EXPLORER_URL}/${network}/tx/${requestKey}`;
-    console.log('Explorer link:', url);
-  }
-  return descriptor;
-};
-
-export const safeSign = (
-  sign: (transaction: IUnsignedCommand) => Promise<IUnsignedCommand | ICommand>,
-) => {
-  return async (tx: IUnsignedCommand) => {
-    if (tx.sigs.length === 0) return tx as ICommand;
-    const signedTx = await sign(tx);
-
-    const { sigs, hash } = signedTx;
-    const txWithSigs = { ...tx, sigs };
-
-    if (txWithSigs.hash !== hash) {
-      throw new Error('Hash mismatch');
+export const ChainId = extendType(number, {
+  defaultValue: () => '0',
+  from: async (n) => {
+    if (Number.isNaN(n) || !Number.isFinite(n) || Math.round(n) !== n || n < 0 || n > 19) {
+      throw new Error(`Input is not a valid chain id`);
     }
-    if (!isSignedTransaction(txWithSigs)) {
-      throw new Error('Signing failed');
+    return n.toString() as KadenaChainId;
+  },
+});
+
+export const MessageData = extendType(array(string), {
+  displayName: 'list',
+  defaultValue: () => ({}),
+  from: async (entries) => {
+    const message: Record<string, unknown> = {};
+
+    for (const str of entries) {
+      const [key, value] = str.split('=');
+      if (!key || !value) {
+        throw new Error('Invalid message data');
+      }
+
+      try {
+        message[key] = JSON.parse(value);
+      } catch {
+        message[key] = value;
+      }
     }
-    return txWithSigs;
-  };
+
+    return message;
+  },
+});
+
+export type Keyset = {
+  pred: BuiltInPredicate;
+  keys: string[];
 };
 
-export const panicIfFails = (response: ICommandResult) => {
-  if (response.result.status !== 'success') {
-    return panic('Failed to execute the command:', JSON.stringify(response.result.error, null, 2));
-  }
-  return response;
-};
+export const Keysets = extendType(array(string), {
+  displayName: 'list',
+  defaultValue: () => ({}),
+  from: async (entries) => {
+    const keysets: Record<string, Keyset> = {};
 
-export const extractResult = <T = PactValue>(response: ICommandResult) => {
-  if (response.result.status !== 'success') {
-    return panicIfFails(response);
-  }
-  return response.result.data as T;
-};
+    for (const str of entries) {
+      const [key, data] = str.split('=');
+      if (!key || !data) {
+        throw new Error('Invalid message data');
+      }
 
-export const estimateGas = (
-  command:
-    | IPartialPactCommand
-    | ((cmd?: IPartialPactCommand | (() => IPartialPactCommand)) => IPartialPactCommand),
-  client = createClient(),
-) => {
-  const pipeLine = asyncPipe(
-    composePactCommand({
-      meta: {
-        gasLimit: 150_000,
-        gasPrice: 1.0e-8,
-      } as IPartialPactCommand['meta'],
-    }),
-    createTransaction,
-    (tx) => client.local(tx, { preflight: true, signatureVerification: false }),
-    panicIfFails,
-    (response) => ({ gasLimit: response.gas, gasPrice: 1.0e-8 }),
-  );
-  return pipeLine(command);
-};
+      const [pred, ...keys] = data.split(',');
+
+      if (pred !== 'keys-all' && pred !== 'keys-any' && pred !== 'keys-2') {
+        throw new Error(`Incorrect keyset predicate: ${pred}`);
+      }
+      if (!keys.length) {
+        throw new Error('No public keys present');
+      }
+
+      keysets[key] = { pred: pred as BuiltInPredicate, keys };
+    }
+
+    return keysets;
+  },
+});
