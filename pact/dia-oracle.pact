@@ -1,7 +1,7 @@
-(namespace "free")
+(namespace "n_bfb76eab37bf8c84359d6552a1d96a309e030b71")
 
 (enforce-keyset (read-keyset 'admin-keyset))
-(define-keyset "free.dia-admin-keyset" (read-keyset 'admin-keyset))
+(define-keyset "n_bfb76eab37bf8c84359d6552a1d96a309e030b71.dia-admin-keyset" (read-keyset 'admin-keyset))
 
 (module dia-oracle GOVERNANCE
   @doc "DIA key/value oracle with support for multiple updates in a single tx"
@@ -10,7 +10,7 @@
     [ (defproperty admin-authorized (authorized-by ADMIN_KEYSET))
     ]
 
-  (defconst ADMIN_KEYSET "free.dia-admin-keyset")
+  (defconst ADMIN_KEYSET "n_bfb76eab37bf8c84359d6552a1d96a309e030b71.dia-admin-keyset")
   (defconst UNIX_EPOCH (parse-time "%s" "0") "Zero Unix epoch")
 
   (defschema value-schema
